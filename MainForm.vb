@@ -147,11 +147,11 @@ Public Class MainForm
         tmpstr = Format("%d", Int(timeoutRW / &H10000))
 
         If (byDeviceId = 255) Then
-            Button1.Text = "硈钡 USB-SPI 锣钡狾"
+            Button1.Text = "連接 USB-SPI 轉接板"
             sFormTitle = "SPI圖片傳送系統"
             Me.Text = sFormTitle
         Else
-            Button1.Text = "硈钡"
+            Button1.Text = "取消連接"
             sFormTitle = "SPI肚块╰参::" + serialNo
             Me.Text = sFormTitle
         End If
@@ -473,93 +473,188 @@ Public Class MainForm
 
     End Sub
 
+    'Private Sub Button5_Click_2(sender As Object, e As EventArgs) Handles Button5.Click
+    '    '48>32bits
+    '    Dim command(256) As Byte
+    '    Dim WriteBuff(256) As Byte
+    '    Dim value, value_temp As UInt16
+
+    '    'Dim value As Integer
+    '    Dim readBuff(2048) As Byte
+
+    '    Dim temp As Byte
+
+    '    If (byDeviceId = 255) Then    'disconnected
+    '        MsgBox("Please connect the device")
+    '        Return
+    '    End If
+
+    '    If (workMode = 1) Then    'upgrade mode
+    '        MsgBox("Please check jumpper and make sure it in normal mode")
+    '        Return
+    '    End If
+    '    If (spiCfg And &H80) Then    'slaver mode
+    '        MsgBox("SPI work as slaver")
+    '        Return
+    '    End If
+
+    '    If (WriteCnt >= 65534) Then
+    '        MsgBox("Write length must less than 65535")
+    '        Return
+    '    End If
+
+
+
+
+
+
+    '    ''  address   DATA Low  DATA High
+    '    ''  16bits   16bits     16bits
+    '    ''  addr      DL        DH
+    '    ''
+    '    ''
+
+
+    '    'Dim Reader(2048) As Byte
+
+    '    'Reader = My.Computer.FileSystem.ReadAllBytes("C:\Users\user\Desktop\SPI_RW\test.txt")
+
+
+    '    Dim fileReader As System.IO.StreamReader
+    '    fileReader = My.Computer.FileSystem.OpenTextFileReader(".\read_write_command_file\send_command.txt")
+    '    Dim stringReader As String
+
+    '    stringReader = fileReader.ReadLine()
+
+    '    Dim adder As Integer
+    '    'Write-------------------------------------------------------------------------------------------------------
+
+    '    While (stringReader IsNot Nothing) '48>32
+    '        Dim Reader() As Byte = System.Text.Encoding.UTF8.GetBytes(stringReader)
+    '        For index As Integer = 0 To 3
+    '            If (Reader(2 * index) > 64) Then
+    '                Reader(2 * index) = Reader(2 * index) - 87
+    '            Else
+    '                Reader(2 * index) = Reader(2 * index) - 48
+    '            End If
+    '            If (Reader(2 * index + 1) > 64) Then
+    '                Reader(2 * index + 1) = Reader(2 * index + 1) - 87
+    '            Else
+    '                Reader(2 * index + 1) = Reader(2 * index + 1) - 48
+    '            End If
+
+    '            WriteBuff(index) = Reader(2 * index) * 16 + Reader(2 * index + 1)
+    '        Next
+    '        USBIO_SPITest(byDeviceId, WriteBuff, readBuff, 4)
+
+    '        If (WriteBuff(1) >= 8) Then
+    '            For adder = 2 To 3
+    '                RichTextBox3.AppendText(readBuff(adder).ToString("X2"))
+    '            Next
+    '            RichTextBox3.AppendText(vbNewLine)
+    '        End If
+
+
+    '        stringReader = fileReader.ReadLine()
+
+    '    End While
+    '    ' Close the file reader
+    '    fileReader.Close()
+
+    '    ' Save the content of RichTextBox3 to result.txt
+    '    Dim resultFilePath As String = Application.StartupPath & "\result.txt"
+    '    Try
+    '        System.IO.File.WriteAllText(resultFilePath, RichTextBox3.Text)
+    '        MessageBox.Show("Content has been saved to " & resultFilePath)
+    '    Catch ex As Exception
+    '        MessageBox.Show("Error saving file: " & ex.Message)
+    '    End Try
+    'End Sub
+
     Private Sub Button5_Click_2(sender As Object, e As EventArgs) Handles Button5.Click
-        '48>32bits
-        Dim command(256) As Byte
-        Dim WriteBuff(256) As Byte
-        Dim value, value_temp As UInt16
+        Dim WriteBuff(256000) As Byte
+        Dim readBuff(204800) As Byte
 
-        'Dim value As Integer
-        Dim readBuff(2048) As Byte
-
-        Dim temp As Byte
-
-        If (byDeviceId = 255) Then    'disconnected
+        ' 檢查設備狀態
+        If byDeviceId = 255 Then
             MsgBox("Please connect the device")
             Return
         End If
 
-        If (workMode = 1) Then    'upgrade mode
-            MsgBox("Please check jumpper and make sure it in normal mode")
-            Return
-        End If
-        If (spiCfg And &H80) Then    'slaver mode
-            MsgBox("SPI work as slaver")
+        If workMode = 1 Then
+            MsgBox("Please check jumper and make sure it is in normal mode")
             Return
         End If
 
-        If (WriteCnt >= 65534) Then
-            MsgBox("Write length must less than 65535")
+        If (spiCfg And &H80) <> 0 Then
+            MsgBox("SPI works as a slave")
             Return
         End If
 
+        If WriteCnt >= 65534 Then
+            MsgBox("Write length must be less than 65535")
+            Return
+        End If
 
+        ' 讀取和處理文件
+        Dim filePath As String = ".\read_write_command_file\send_command.txt"
+        If Not System.IO.File.Exists(filePath) Then
+            MsgBox("Command file not found.")
+            Return
+        End If
 
+        Dim fileReader As System.IO.StreamReader = Nothing
+        Try
+            fileReader = New System.IO.StreamReader(filePath)
+            Dim stringReader As String = fileReader.ReadLine()
 
+            While stringReader IsNot Nothing
+                Dim commandBytes As Byte() = HexStringToByteArray(stringReader.Trim())
 
+                ' 判斷指令長度並填充 WriteBuff
+                If commandBytes.Length <= WriteBuff.Length Then
+                    Array.Copy(commandBytes, WriteBuff, commandBytes.Length)
+                    USBIO_SPITest(byDeviceId, WriteBuff, readBuff, commandBytes.Length)
 
-        ''  address   DATA Low  DATA High
-        ''  16bits   16bits     16bits
-        ''  addr      DL        DH
-        ''
-        ''
-
-
-        'Dim Reader(2048) As Byte
-
-        'Reader = My.Computer.FileSystem.ReadAllBytes("C:\Users\user\Desktop\SPI_RW\test.txt")
-
-
-        Dim fileReader As System.IO.StreamReader
-        fileReader = My.Computer.FileSystem.OpenTextFileReader(".\read_write_command_file\send_command.txt")
-        Dim stringReader As String
-
-        stringReader = fileReader.ReadLine()
-
-        Dim adder As Integer
-        'Write-------------------------------------------------------------------------------------------------------
-
-        While (stringReader IsNot Nothing) '48>32
-            Dim Reader() As Byte = System.Text.Encoding.UTF8.GetBytes(stringReader)
-            For index As Integer = 0 To 3
-                If (Reader(2 * index) > 64) Then
-                    Reader(2 * index) = Reader(2 * index) - 87
+                    ' 處理結果
+                    If WriteBuff.Length >= 8 Then
+                        For adder As Integer = 2 To 3
+                            RichTextBox3.AppendText(readBuff(adder).ToString("X2"))
+                        Next
+                        RichTextBox3.AppendText(vbNewLine)
+                    End If
                 Else
-                    Reader(2 * index) = Reader(2 * index) - 48
-                End If
-                If (Reader(2 * index + 1) > 64) Then
-                    Reader(2 * index + 1) = Reader(2 * index + 1) - 87
-                Else
-                    Reader(2 * index + 1) = Reader(2 * index + 1) - 48
+                    MsgBox("Command length exceeds buffer size.")
                 End If
 
-                WriteBuff(index) = Reader(2 * index) * 16 + Reader(2 * index + 1)
-            Next
-            USBIO_SPITest(byDeviceId, WriteBuff, readBuff, 4)
+                stringReader = fileReader.ReadLine()
+            End While
 
-            If (WriteBuff(1) >= 8) Then
-                For adder = 2 To 3
-                    RichTextBox3.AppendText(readBuff(adder).ToString("X2"))
-                Next
-                RichTextBox3.AppendText(vbNewLine)
-            End If
+        Catch ex As Exception
+            MsgBox("Error reading file: " & ex.Message)
+        Finally
+            If fileReader IsNot Nothing Then fileReader.Close()
+        End Try
 
-
-            stringReader = fileReader.ReadLine()
-
-        End While
-
+        ' 保存結果到 result.txt
+        Dim resultFilePath As String = System.IO.Path.Combine(Application.StartupPath, "result.txt")
+        Try
+            System.IO.File.WriteAllText(resultFilePath, RichTextBox3.Text)
+            MessageBox.Show("Content has been saved to " & resultFilePath)
+        Catch ex As Exception
+            MessageBox.Show("Error saving file: " & ex.Message)
+        End Try
     End Sub
+
+    ' 將十六進制字串轉換為字節數組
+    Private Function HexStringToByteArray(hex As String) As Byte()
+        Dim numOfChars As Integer = hex.Length
+        Dim bytes(numOfChars / 2 - 1) As Byte
+        For i As Integer = 0 To numOfChars - 1 Step 2
+            bytes(i / 2) = Convert.ToByte(hex.Substring(i, 2), 16)
+        Next
+        Return bytes
+    End Function
 
     Private Sub RichTextBox2_TextChanged_1(sender As Object, e As EventArgs)
 
